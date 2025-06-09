@@ -78,16 +78,14 @@ int main(int argc, char *argv[]) {
   FILE *firmware_file = NULL;
   int error = 0;
   uint32_t n_bytes = 0;
+  uint32_t n_count = 0;
   int i;
   setbuf(stdout, NULL);
   uint8_t _timer = 0;
 
-  printf("\n+-----------------------------------------------------------------------+\n");
-  printf  ("|         HID-Flash v2.2.1 - STM32 HID Bootloader Flash Tool            |\n");
-  printf  ("|     (c)      2018 - Bruno Freitas       http://www.brunofreitas.com   |\n");
-  printf  ("|     (c) 2018-2019 - Vassilis Serasidis  https://www.serasidis.gr      |\n");
-  printf  ("|   Customized for STM32duino ecosystem   https://www.stm32duino.com    |\n");
-  printf  ("+-----------------------------------------------------------------------+\n\n");
+  printf("\n+-----------------------------+\n");
+  printf  ("|      VOLUMIC HID-Flash      |\n");
+  printf  ("+-----------------------------+\n\n");
 
   // TODO:  This really needs an option parser
   if(argc < 2) {
@@ -132,12 +130,12 @@ int main(int argc, char *argv[]) {
       cur_dev = cur_dev->next;
     }
     hid_free_enumeration(devs);
-    printf("#");
+    printf(".");
     sleep(1);
     if(valid_hid_devices > 0) break;
   }
   if (valid_hid_devices == 0){
-    printf("\nError - [%04X:%04X] device is not found :(",VID,PID);
+    printf("\nError - [%04X:%04X] HYPERLUMIC is not found :(",VID,PID);
     error = 1;
     goto exit;
   }
@@ -145,18 +143,18 @@ int main(int argc, char *argv[]) {
   handle = hid_open(VID, PID, NULL);
 
   if (i == 10 && handle != NULL) {
-    printf("\n> Unable to open the [%04X:%04X] device.\n",VID,PID);
+    printf("\n> Unable to open the [%04X:%04X] HYPERLUMIC.\n",VID,PID);
     error = 1;
     goto exit;
   }
 
-  printf("\n> [%04X:%04X] device is found !\n",VID,PID);
+  printf("\n> [%04X:%04X] HYPERLUMIC is found !\n",VID,PID);
 
   // Send RESET PAGES command to put HID bootloader in initial stage...
   memset(hid_tx_buf, 0, sizeof(hid_tx_buf)); //Fill the hid_tx_buf with zeros.
   memcpy(&hid_tx_buf[1], CMD_RESET_PAGES, sizeof(CMD_RESET_PAGES));
 
-  printf("> Sending <reset pages> command...\n");
+  printf("> <reset pages> command...\n");
 
   // Flash is unavailable when writing to it, so USB interrupt may fail here
   if(!usb_write(handle, hid_tx_buf, HID_TX_SIZE)) {
@@ -167,7 +165,7 @@ int main(int argc, char *argv[]) {
   memset(hid_tx_buf, 0, sizeof(hid_tx_buf));
 
   // Send Firmware File data
-  printf("> Flashing firmware...\n");
+  printf("> Flashing...\n");
 
   memset(page_data, 0, sizeof(page_data));
   read_bytes = fread(page_data, 1, sizeof(page_data), firmware_file);
@@ -178,7 +176,7 @@ int main(int argc, char *argv[]) {
       memcpy(&hid_tx_buf[1], page_data + i, HID_TX_SIZE - 1);
 
       if((i % 1024) == 0){
-        printf(".");
+        printf("> ");
       }
 
       // Flash is unavailable when writing to it, so USB interrupt may fail here
@@ -191,17 +189,29 @@ int main(int argc, char *argv[]) {
       usleep(500);
     }
 
-    printf(" %d Bytes\n", n_bytes);
+    printf("%d Bytes\n", n_bytes);
 
     do{
       hid_read(handle, hid_rx_buf, 9);
       usleep(500);
+/*      if(n_count==0) {
+        printf("> HID ACK WAIT...\n");
+      }*/
+      n_count++;
+      if(n_count>100) {
+        n_count=0;
+        printf("> ACK TIMEOUT!\n");
+        goto alexit;
+      }
     // Exit the loop if we recieve 0x02 or 0x03
     }while((hid_rx_buf[7] & 0xFE) != 0x02);
 
+alexit:
+    //printf("> Memset data...\n");
     memset(page_data, 0, sizeof(page_data));
     read_bytes = fread(page_data, 1, sizeof(page_data), firmware_file);
 
+    //printf("> HD Size check...\n");
     // For stm32f1 high density devices (2K page size) will receive a
     // 0x03 command acknowledgement above.  In that case, we must
     // make sure that we send a full 2K so the last page is written.
@@ -216,17 +226,17 @@ int main(int argc, char *argv[]) {
   printf("\n> Done!\n");
 
   // Send CMD_REBOOT_MCU command to reboot the microcontroller...
+  usleep(10000);
   memset(hid_tx_buf, 0, sizeof(hid_tx_buf));
   memcpy(&hid_tx_buf[1], CMD_REBOOT_MCU, sizeof(CMD_REBOOT_MCU));
-
   printf("> Sending <reboot mcu> command...\n");
-
   // Flash is unavailable when writing to it, so USB interrupt may fail here
   if(!usb_write(handle, hid_tx_buf, HID_TX_SIZE)) {
     printf("> Error while sending <reboot mcu> command.\n");
   }
 
 exit:
+
   if(handle) {
     hid_close(handle);
   }
@@ -237,7 +247,7 @@ exit:
     fclose(firmware_file);
   }
 
-  if (argc > 2) {
+/*  if (argc > 2) {
     printf("> Searching for [%s] ...\n",argv[2]);
 
     for(int i=0;i<5;i++){
@@ -252,6 +262,7 @@ exit:
       printf("> Comport is not found\n");
     }
   }
+*/
   printf("> Finish\n");
 
   return error;
@@ -259,7 +270,7 @@ exit:
 
 int serial_init(char *argument, uint8_t __timer) {
 
-  printf("> Trying to open the [%s]...\n",argument);
+  printf("> Trying to open [%s]...\n",argument);
   if(RS232_OpenComport(argument)){
     return(1);
   }
